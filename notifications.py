@@ -5,9 +5,35 @@ from dashboard_config import get_credentials
 creds = get_credentials()
 BOT_TOKEN = creds["bot_token"]
 
+async def send_telegram_alert(channel_name, trade_data, update_type="ENTRY"):
+    """
+    Standard text-based alert (Used for Exits/Updates).
+    Restored this function to fix the ImportError.
+    """
+    if not BOT_TOKEN: return
+    
+    chat_id = creds["channels"].get(channel_name)
+    if not chat_id: return
+
+    bot = telegram.Bot(token=BOT_TOKEN)
+    
+    symbol = trade_data['symbol']
+    
+    if update_type == "ENTRY":
+        msg = f"🚀 **ENTRY**: {symbol}\nPrice: {trade_data['entry_price']}"
+    elif update_type == "EXIT":
+        msg = f"🛑 **CLOSED**: {symbol}\nExit Price: {trade_data.get('current_ltp', 'N/A')}"
+    else:
+        msg = f"ℹ️ **UPDATE**: {symbol} ({update_type})"
+    
+    try:
+        await bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
+    except Exception as e:
+        print(f"[TG ERROR] {e}")
+
 async def send_interactive_alert(channel_name, trade_data):
     """
-    Sends an alert with an 'Execute Live' button if it's a Paper trade.
+    Rich alert with 'Execute Live' buttons (Used for New Entries).
     """
     if not BOT_TOKEN: return
     
@@ -20,7 +46,7 @@ async def send_interactive_alert(channel_name, trade_data):
     price = trade_data['entry_price']
     mode = trade_data['mode']
     
-    # 5-Level Target Display
+    # Format 5 Targets
     targets_msg = "\n".join([f"🎯 T{i+1}: {t:.2f}" for i, t in enumerate(trade_data['targets'])])
 
     msg = (
@@ -31,7 +57,7 @@ async def send_interactive_alert(channel_name, trade_data):
         f"{targets_msg}\n"
     )
 
-    # Add Button ONLY if it is a Paper trade (to allow Promotion)
+    # Add Button ONLY if it is a Paper trade
     keyboard = None
     if mode == "PAPER":
         keyboard = InlineKeyboardMarkup([
