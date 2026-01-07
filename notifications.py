@@ -1,15 +1,13 @@
-# filename: notifications.py
 import telegram
-import asyncio
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from dashboard_config import get_credentials
 
 creds = get_credentials()
 BOT_TOKEN = creds["bot_token"]
 
-async def send_telegram_alert(channel_name, trade_data, update_type="ENTRY"):
+async def send_interactive_alert(channel_name, trade_data):
     """
-    Sends alerts. 
-    channel_name: 'Free' or 'VIP'
+    Sends an alert with an 'Execute Live' button if it's a Paper trade.
     """
     if not BOT_TOKEN: return
     
@@ -20,22 +18,27 @@ async def send_telegram_alert(channel_name, trade_data, update_type="ENTRY"):
     
     symbol = trade_data['symbol']
     price = trade_data['entry_price']
+    mode = trade_data['mode']
     
-    if update_type == "ENTRY":
-        msg = (
-            f"🚀 **NEW TRADE ALERT** ({channel_name})\n\n"
-            f"Symbol: `{symbol}`\n"
-            f"Entry: {price}\n"
-            f"SL: {trade_data['sl']}\n\n"
-            f"🎯 Targets:\n"
-            f"1. {trade_data['targets'][0]}\n"
-            f"2. {trade_data['targets'][1]}\n"
-            f"3. {trade_data['targets'][2]}\n"
-        )
-    elif update_type == "EXIT":
-        msg = f"🛑 **TRADE CLOSED**\n{symbol}\nExit Price: {trade_data['current_ltp']}"
+    # 5-Level Target Display
+    targets_msg = "\n".join([f"🎯 T{i+1}: {t:.2f}" for i, t in enumerate(trade_data['targets'])])
+
+    msg = (
+        f"🚀 **NEW TRADE ({mode})**\n\n"
+        f"Symbol: `{symbol}`\n"
+        f"Entry: {price}\n"
+        f"SL: {trade_data['sl']}\n\n"
+        f"{targets_msg}\n"
+    )
+
+    # Add Button ONLY if it is a Paper trade (to allow Promotion)
+    keyboard = None
+    if mode == "PAPER":
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("⚡ Execute Live", callback_data=f"PROMOTE_{trade_data['id']}")]
+        ])
     
     try:
-        await bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
+        await bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown', reply_markup=keyboard)
     except Exception as e:
         print(f"[TG ERROR] {e}")
